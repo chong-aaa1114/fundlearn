@@ -7,14 +7,26 @@
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
+    <nav class="top-nav" id="top-nav">
+      <div class="nav-inner">
+        <span class="nav-brand">Fund Copilot</span>
+        <div class="nav-links">
+          <a class="nav-link" href="#section-overview">总览</a>
+          <a class="nav-link" href="#section-focus">策略</a>
+          <a class="nav-link" href="#section-detail">详情</a>
+          <a class="nav-link" href="#section-learning">成长</a>
+          <a class="nav-link" href="#section-holdings">持仓</a>
+          <a class="nav-link" href="#section-watchlist">候选</a>
+          <a class="nav-link" href="#section-import">导入</a>
+        </div>
+        <button id="assistant-fab-nav" class="nav-ai-btn" type="button">AI 助手</button>
+      </div>
+    </nav>
     <div class="shell">
       <header class="hero">
         <div class="hero-copy">
           <p class="eyebrow">Fund Strategy Copilot</p>
           <h1>把握基金趋势，<br>让策略更有数。</h1>
-          <p class="hero-text">
-            专注于持仓导入、深度走势分析与规则化 AI 策略建议。只保留真实基金数据，为您提供最可靠的投资参考。
-          </p>
           <div class="hero-actions">
             <button id="refresh-held-btn" class="primary">刷新持仓数据</button>
             <button id="refresh-all-btn" class="secondary">刷新全部数据</button>
@@ -22,16 +34,8 @@
           </div>
         </div>
         <div class="hero-panel">
-          <p class="panel-label">核心功能</p>
-          <ul class="goal-list">
-            <li>多维度净值趋势回撤分析</li>
-            <li>智能 AI 生成加仓 / 止盈建议</li>
-            <li>全自动持仓数据同步</li>
-            <li>基金观察池动态追踪</li>
-          </ul>
-          <p id="data-source-note" class="muted source-note"></p>
+          <p class="panel-label">AI 配置</p>
           <div class="ai-config-card">
-            <p class="panel-label">AI 引擎配置</p>
             <div class="ai-config-form">
               <label class="field">
                 <span>模型来源</span>
@@ -53,7 +57,7 @@
       </header>
 
       <main class="grid">
-        <section class="card card-span-3">
+        <section id="section-overview" class="card card-span-3">
           <div class="section-head">
             <div>
               <p class="section-kicker">Portfolio</p>
@@ -64,7 +68,7 @@
           <div id="summary-cards" class="summary-cards"></div>
         </section>
 
-        <section class="card strategy-card">
+        <section id="section-focus" class="card strategy-card">
           <div class="section-head">
             <div>
               <p class="section-kicker">Focus</p>
@@ -74,7 +78,7 @@
           <div id="strategy-focus" class="strategy-focus"></div>
         </section>
 
-        <section class="card detail-main-card">
+        <section id="section-detail" class="card detail-main-card">
           <div class="section-head">
             <div>
               <p class="section-kicker">Insight</p>
@@ -88,30 +92,7 @@
           <div id="fund-detail" class="detail-panel"></div>
         </section>
 
-        <section class="card assistant-card">
-          <div class="section-head">
-            <div>
-              <p class="section-kicker">Assistant</p>
-              <h2>智能投顾助手</h2>
-            </div>
-          </div>
-          <div id="assistant-suggestions" class="chip-row"></div>
-          <div class="assistant-form">
-            <textarea
-              id="assistant-question"
-              class="assistant-input"
-              spellcheck="false"
-              placeholder="输入你的疑问，如：为什么这个基金提示止盈？"
-            ></textarea>
-            <div class="toolbar">
-              <button id="assistant-ask-btn" class="primary">提问 AI</button>
-              <button id="assistant-learn-btn" class="secondary">新手模式</button>
-            </div>
-          </div>
-          <div id="assistant-answer" class="assistant-answer empty">等待提问...</div>
-        </section>
-
-        <section class="card learning-card">
+        <section id="section-learning" class="card learning-card">
           <div class="section-head">
             <div>
               <p class="section-kicker">Education</p>
@@ -119,10 +100,10 @@
             </div>
           </div>
           <div id="learning-roadmap" class="learning-roadmap"></div>
-          <div id="learning-topics" class="learning-topics" style="margin-top: 24px;"></div>
+          <div id="learning-topics" class="learning-topics"></div>
         </section>
 
-        <section class="card card-span-3">
+        <section id="section-holdings" class="card card-span-3">
           <div class="section-head">
             <div>
               <p class="section-kicker">Holdings</p>
@@ -132,57 +113,123 @@
           <div id="positions-table" class="table-wrap"></div>
         </section>
 
-        <section class="card card-span-3">
+        <section id="section-watchlist" class="card card-span-3">
           <div class="section-head">
             <div>
               <p class="section-kicker">Watchlist</p>
               <h2>候选基金观察池</h2>
             </div>
           </div>
-          <div id="watchlist-grid" class="watchlist-grid"></div>
+          <details class="fold-card">
+            <summary>展开观察池</summary>
+            <div id="watchlist-grid" class="watchlist-grid"></div>
+          </details>
         </section>
 
-        <section class="card card-span-3">
+        <section id="section-import" class="card card-span-3">
           <div class="section-head">
             <div>
-              <p class="section-kicker">Import</p>
-              <h2>数据导入</h2>
+              <p class="section-kicker">Add Holding</p>
+              <h2>手动加入持仓</h2>
             </div>
           </div>
-          <div class="quick-form">
-            <label class="field">
-              <span>基金代码</span>
-              <input id="quick-fund-code" type="text" placeholder="110011" value="110011" />
-            </label>
-            <label class="field">
-              <span>基金名称 (可选)</span>
-              <input id="quick-fund-name" type="text" placeholder="自动识别" />
-            </label>
-            <label class="field">
-              <span>持有金额</span>
-              <input id="quick-holding-amount" type="number" value="12000" />
-            </label>
-            <label class="field">
-              <span>当前收益率 (%)</span>
-              <input id="quick-return-rate" type="number" value="12.5" />
-            </label>
-            <div class="field" style="justify-content: flex-end;">
-              <button id="quick-import-btn" class="primary">快速导入</button>
+          <details class="fold-card">
+            <summary>展开手动录入</summary>
+            <div class="quick-form">
+              <label class="field">
+                <span>基金代码</span>
+                <input id="quick-fund-code" type="text" placeholder="例如 110011" />
+              </label>
+              <label class="field">
+                <span>基金名称 (可选)</span>
+                <input id="quick-fund-name" type="text" placeholder="自动识别" />
+              </label>
+              <label class="field">
+                <span>持有金额</span>
+                <input id="quick-holding-amount" type="number" placeholder="例如 12000" />
+              </label>
+              <label class="field">
+                <span>当前收益率 (%)</span>
+                <input id="quick-return-rate" type="number" placeholder="例如 12.5 或 -3.8" />
+              </label>
+              <div class="field field-actions">
+                <button id="quick-import-btn" class="primary">快速导入</button>
+              </div>
             </div>
-          </div>
-          <p id="import-result" class="muted" style="margin-top: 12px;"></p>
-          
-          <details class="advanced-import" style="margin-top: 24px; padding-top: 24px; border-top: 1px dashed var(--line);">
-            <summary style="cursor: pointer; font-weight: 600; color: var(--text-muted);">批量导入 (CSV/JSON)</summary>
-            <textarea id="import-content" class="import-box" style="width: 100%; min-height: 120px; margin-top: 12px; font-family: monospace;" spellcheck="false">基金代码,基金名称,持有份额,持仓成本,买入日期
-110011,华夏景气成长混合,1800,1.16,2025-08-16</textarea>
-            <div class="toolbar" style="margin-top: 12px;">
-              <button id="import-btn" class="secondary small">覆盖批量导入</button>
-              <button id="append-btn" class="secondary small">追加批量导入</button>
-            </div>
+            <p id="import-result" class="muted import-result"></p>
+            
+            <details class="advanced-import">
+              <summary>批量导入 (CSV/JSON)</summary>
+              <textarea id="import-content" class="import-box" spellcheck="false" placeholder="基金代码,基金名称,持有份额,持仓成本,买入日期&#10;110011,某基金,1800,1.16,2025-08-16"></textarea>
+              <div class="toolbar">
+                <button id="import-btn" class="secondary small">覆盖批量导入</button>
+                <button id="append-btn" class="secondary small">追加批量导入</button>
+              </div>
+            </details>
           </details>
         </section>
       </main>
+    </div>
+
+    <button id="assistant-fab" class="assistant-fab" type="button">AI</button>
+
+    <aside id="assistant-drawer" class="assistant-drawer" aria-hidden="true">
+      <div class="assistant-drawer-panel">
+        <div class="assistant-drawer-head">
+          <div>
+            <p class="section-kicker">Assistant</p>
+            <h2>新手问答助手</h2>
+          </div>
+          <button id="assistant-close-btn" class="secondary small" type="button">关闭</button>
+        </div>
+        <div id="assistant-suggestions" class="chip-row"></div>
+        <div class="assistant-form">
+          <textarea
+            id="assistant-question"
+            class="assistant-input"
+            spellcheck="false"
+            placeholder="比如：什么是最大回撤？为什么这只基金提示继续观察？"
+          ></textarea>
+          <div class="toolbar">
+            <button id="assistant-ask-btn" class="primary">问 AI 助手</button>
+            <button id="assistant-learn-btn" class="secondary">用新手模式讲解</button>
+          </div>
+        </div>
+        <div id="assistant-answer" class="assistant-answer empty">点一个推荐问题，或者直接输入你不懂的词。</div>
+      </div>
+    </aside>
+
+    <div id="holding-modal" class="holding-modal" aria-hidden="true">
+      <div class="holding-modal-card">
+        <div class="assistant-drawer-head">
+          <div>
+            <p id="holding-modal-kicker" class="section-kicker">Add Holding</p>
+            <h2 id="holding-modal-title">加入我的持仓</h2>
+          </div>
+          <button id="holding-modal-close" class="secondary small" type="button">关闭</button>
+        </div>
+        <div class="quick-form">
+          <label class="field">
+            <span>基金代码</span>
+            <input id="holding-modal-code" type="text" readonly />
+          </label>
+          <label class="field">
+            <span>基金名称</span>
+            <input id="holding-modal-name" type="text" readonly />
+          </label>
+          <label class="field">
+            <span>当前持有金额</span>
+            <input id="holding-modal-amount" type="number" min="0" step="0.01" placeholder="例如 12000" />
+          </label>
+          <label class="field">
+            <span>当前收益率 (%)</span>
+            <input id="holding-modal-return" type="number" step="0.01" placeholder="例如 12.5 或 -3.8" />
+          </label>
+        </div>
+        <div class="toolbar">
+          <button id="holding-modal-submit" class="primary" type="button">加入持仓</button>
+        </div>
+      </div>
     </div>
 
     <script src="/static/app.js"></script>

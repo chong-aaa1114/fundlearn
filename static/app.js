@@ -4,6 +4,7 @@ const state = {
   selectedDetail: null,
   aiConfig: null,
   learningTopics: [],
+  pendingHoldingFund: null,
   aiDraft: {
     provider: null,
     modelByProvider: {},
@@ -161,6 +162,32 @@ function setMessage(message, isError = false) {
   const target = document.getElementById("import-result");
   target.textContent = message;
   target.className = isError ? "muted danger-text" : "muted success-text";
+}
+
+function setDrawerOpen(open) {
+  const drawer = document.getElementById("assistant-drawer");
+  if (!drawer) {
+    return;
+  }
+  drawer.classList.toggle("open", open);
+  drawer.setAttribute("aria-hidden", open ? "false" : "true");
+  document.body.classList.toggle(
+    "overlay-open",
+    open || document.getElementById("holding-modal")?.classList.contains("open")
+  );
+}
+
+function setHoldingModalOpen(open) {
+  const modal = document.getElementById("holding-modal");
+  if (!modal) {
+    return;
+  }
+  modal.classList.toggle("open", open);
+  modal.setAttribute("aria-hidden", open ? "false" : "true");
+  document.body.classList.toggle(
+    "overlay-open",
+    open || document.getElementById("assistant-drawer")?.classList.contains("open")
+  );
 }
 
 function getProviderMeta(providerId) {
@@ -427,7 +454,10 @@ function renderPositions(positions) {
                     <strong>${item.fund_name}</strong>
                   </button>
                   <p class="cell-sub">${item.category} · ${item.fund_code}</p>
-                  <p class="cell-sub">来源 真实数据</p>
+                  <div class="toolbar" style="margin-top: 8px;">
+                    <button class="secondary small" data-update-holding="${item.fund_code}" data-name="${item.fund_name}" data-amount="${item.current_value}" data-return="${item.pnl_ratio}">更新持仓</button>
+                    <button class="danger-btn small" data-delete-holding="${item.fund_code}">删除</button>
+                  </div>
                 </td>
                 <td>
                   ${formatMoney(item.current_value)}
@@ -441,7 +471,6 @@ function renderPositions(positions) {
                 <td>${item.current_nav.toFixed(4)}</td>
                 <td>
                   <span class="${scoreClass(item.analysis.tag)}">${item.analysis.action}</span>
-                  <p class="cell-sub">分数 ${item.analysis.score}</p>
                 </td>
               </tr>
             `
@@ -453,6 +482,21 @@ function renderPositions(positions) {
 
   target.querySelectorAll("[data-select-fund]").forEach((button) => {
     button.addEventListener("click", () => selectFund(button.dataset.selectFund));
+  });
+
+  target.querySelectorAll("[data-update-holding]").forEach((button) => {
+    button.addEventListener("click", () => {
+      openHoldingModal(
+        button.dataset.updateHolding,
+        button.dataset.name,
+        button.dataset.amount,
+        button.dataset.return
+      );
+    });
+  });
+
+  target.querySelectorAll("[data-delete-holding]").forEach((button) => {
+    button.addEventListener("click", () => deletePosition(button.dataset.deleteHolding));
   });
 }
 
@@ -473,10 +517,10 @@ function renderWatchlist(funds) {
             fund.analysis.metrics.max_drawdown
           )}</p>
           <p class="muted">${fund.analysis.reasons[0] || "暂无说明。"}</p>
-              <button class="secondary small" data-select-fund="${fund.fund_code}">查看详情</button>
-              <p class="cell-sub">来源 真实数据 · 同步 ${formatSyncTime(
-                fund.last_synced_at
-              )}</p>
+          <div class="watch-actions">
+            <button class="secondary small" data-select-fund="${fund.fund_code}">查看详情</button>
+            <button class="primary small" data-add-holding="${fund.fund_code}">加入持仓</button>
+          </div>
         </article>
       `
     )
@@ -484,6 +528,9 @@ function renderWatchlist(funds) {
 
   target.querySelectorAll("[data-select-fund]").forEach((button) => {
     button.addEventListener("click", () => selectFund(button.dataset.selectFund));
+  });
+  target.querySelectorAll("[data-add-holding]").forEach((button) => {
+    button.addEventListener("click", () => openHoldingModal(button.dataset.addHolding));
   });
 }
 
@@ -611,13 +658,18 @@ function renderFundDetail(detail) {
       <div>
         <h3>${escapeHtml(fund.name)}</h3>
         <p class="muted">${escapeHtml(fund.category)} · 基金经理 ${escapeHtml(fund.manager)}</p>
-        <p class="cell-sub">来源 真实数据 · 最近同步 ${formatSyncTime(
-          fund.last_synced_at
-        )}</p>
       </div>
-      <span class="${scoreClass(analysis.tag)}">${escapeHtml(analysis.action)}</span>
+      <div class="detail-head-actions">
+        ${
+          analysis.holding
+            ? ""
+            : `<button class="primary small" data-detail-add-holding="${escapeHtml(fund.code)}">加入我的持仓</button>`
+        }
+        <span class="${scoreClass(analysis.tag)}">${escapeHtml(analysis.action)}</span>
+      </div>
     </div>
-    <p class="muted">${escapeHtml(fund.description)}</p>
+    <p class="cell-sub">最近同步 ${formatSyncTime(fund.last_synced_at)}</p>
+    ${fund.description ? `<p class="muted">${escapeHtml(fund.description)}</p>` : ""}
     <div class="detail-overview">
       <div class="detail-chart">
         ${buildSparkline(history)}
@@ -649,6 +701,10 @@ function renderFundDetail(detail) {
     </div>
     ${reportBlock}
   `;
+
+  target.querySelectorAll("[data-detail-add-holding]").forEach((button) => {
+    button.addEventListener("click", () => openHoldingModal(button.dataset.detailAddHolding));
+  });
 }
 
 function renderAssistantSuggestions(detail) {
@@ -673,6 +729,7 @@ function renderAssistantSuggestions(detail) {
   target.querySelectorAll("[data-assistant-chip]").forEach((button, index) => {
     button.addEventListener("click", () => {
       document.getElementById("assistant-question").value = suggestions[index].label;
+      setDrawerOpen(true);
       askAssistant(suggestions[index].mode, suggestions[index].label);
     });
   });
@@ -715,6 +772,7 @@ function renderAssistantAnswer(payload) {
     button.addEventListener("click", () => {
       const question = payload.follow_ups[index];
       document.getElementById("assistant-question").value = question;
+      setDrawerOpen(true);
       askAssistant("qa", question);
     });
   });
@@ -726,28 +784,24 @@ function renderLearningTopics(topics) {
     target.innerHTML = `<div class="empty">还没有学习主题，先选择一只基金后再来看。</div>`;
     return;
   }
-  target.innerHTML = topics
-    .map(
-      (topic, index) => `
-        <article class="learning-topic">
-          <span>推荐学习主题 ${index + 1}</span>
-          <h4>${escapeHtml(topic.title)}</h4>
-          <p>${escapeHtml(topic.summary)}</p>
-          <ul>
-            <li>${escapeHtml(topic.why_it_matters)}</li>
-          </ul>
-          <div class="toolbar">
-            <button class="secondary small" data-learning-ask="${index}">让 AI 讲明白</button>
-          </div>
-        </article>
-      `
-    )
-    .join("");
+  target.innerHTML = `<div class="topic-chips">
+    ${topics.map((topic, index) => `
+      <article class="topic-chip">
+        <div class="topic-chip-head">
+          <span class="topic-num">${index + 1}</span>
+          <strong>${escapeHtml(topic.title)}</strong>
+        </div>
+        <p class="topic-chip-why">${escapeHtml(topic.why_it_matters)}</p>
+        <button class="secondary small" data-learning-ask="${index}">让 AI 讲明白</button>
+      </article>
+    `).join("")}
+  </div>`;
 
   target.querySelectorAll("[data-learning-ask]").forEach((button, index) => {
     button.addEventListener("click", () => {
       const question = topics[index].suggested_question;
       document.getElementById("assistant-question").value = question;
+      setDrawerOpen(true);
       askAssistant("learning", question);
     });
   });
@@ -758,83 +812,119 @@ function renderLearningRoadmap(detail, topics) {
   const fundName = detail?.fund?.name || "当前基金";
   const leadTopicId = topics?.[0]?.id || "";
   const activeStepIndex = (() => {
-    if (["nav-basics"].includes(leadTopicId)) {
-      return 0;
-    }
-    if (["drawdown-volatility", "high-volatility", "drawdown-survival"].includes(leadTopicId)) {
-      return 1;
-    }
-    if (["index-tracking", "qdii-currency", "index-vs-active"].includes(leadTopicId)) {
-      return 2;
-    }
-    if (["position-sizing", "take-profit", "dca-basics"].includes(leadTopicId)) {
-      return 3;
-    }
+    if (["nav-basics"].includes(leadTopicId)) return 0;
+    if (["drawdown-volatility", "high-volatility", "drawdown-survival"].includes(leadTopicId)) return 1;
+    if (["index-tracking", "qdii-currency", "index-vs-active"].includes(leadTopicId)) return 2;
+    if (["position-sizing", "take-profit", "dca-basics"].includes(leadTopicId)) return 3;
     return 0;
   })();
   const steps = [
-    {
-      title: "第一步：先看懂页面语言",
-      focus: "净值、收益率、持仓成本",
-      desc: "先搞清楚自己到底赚了多少、亏了多少，以及基金现在在哪个位置。",
-      question: "请像给新手上第一课一样，解释净值、收益率、持仓成本分别是什么意思。",
-    },
-    {
-      title: "第二步：再看懂风险语言",
-      focus: "波动率、最大回撤、仓位",
-      desc: "只有先知道这只基金跌起来会多疼，你才知道仓位该不该重。",
-      question: "波动率和最大回撤有什么区别？我应该先看哪个？",
-    },
-    {
-      title: "第三步：认识基金类型",
-      focus: "指数基金、主动基金、QDII",
-      desc: `把 ${fundName} 放回它的类别里看，你才知道它为什么会这样涨跌。`,
-      question: "指数基金、主动基金、QDII 分别适合什么样的新手？",
-    },
-    {
-      title: "第四步：学会行动策略",
-      focus: "定投、止盈、复盘",
-      desc: "最后再学什么时候分批买、什么时候先收利润、什么时候先别动。",
-      question: "定投、止盈和复盘，作为新手我应该先学哪个？",
-    },
+    { title: "看懂页面", focus: "净值 · 收益率 · 成本", question: "请像给新手上第一课一样，解释净值、收益率、持仓成本分别是什么意思。" },
+    { title: "理解风险", focus: "波动率 · 最大回撤", question: "波动率和最大回撤有什么区别？我应该先看哪个？" },
+    { title: "认识类型", focus: `指数 · 主动 · QDII`, question: "指数基金、主动基金、QDII 分别适合什么样的新手？" },
+    { title: "学会行动", focus: "定投 · 止盈 · 复盘", question: "定投、止盈和复盘，作为新手我应该先学哪个？" },
   ];
 
   target.innerHTML = `
-    <div class="roadmap-head">
-      <p class="section-kicker">Roadmap</p>
-      <h3>新手路线图</h3>
-      <p class="muted">按从易到难学，先看懂基础语言，再理解风险，最后学会做动作。</p>
-    </div>
-    <div class="roadmap-steps">
-      ${steps
-        .map(
-          (step, index) => `
-            <article class="roadmap-step ${index === activeStepIndex ? "is-active" : ""}">
-              <div class="roadmap-step-top">
-                <span class="roadmap-index">0${index + 1}</span>
-                <div>
-                  <h4>${escapeHtml(step.title)}</h4>
-                  <p class="muted">${escapeHtml(step.focus)}</p>
-                </div>
-              </div>
-              <p>${escapeHtml(step.desc)}</p>
-              <div class="toolbar">
-                <button class="secondary small" data-roadmap-ask="${index}">从这一步开始学</button>
-              </div>
-            </article>
-          `
-        )
-        .join("")}
+    <div class="roadmap-track">
+      ${steps.map((step, index) => `
+        <button class="roadmap-node ${index === activeStepIndex ? "is-active" : ""}" data-roadmap-ask="${index}">
+          <span class="roadmap-node-num">${index + 1}</span>
+          <span class="roadmap-node-title">${escapeHtml(step.title)}</span>
+          <span class="roadmap-node-focus">${escapeHtml(step.focus)}</span>
+        </button>
+        ${index < steps.length - 1 ? '<span class="roadmap-connector"></span>' : ""}
+      `).join("")}
     </div>
   `;
 
   target.querySelectorAll("[data-roadmap-ask]").forEach((button, index) => {
     button.addEventListener("click", () => {
-      const question = steps[index].question;
-      document.getElementById("assistant-question").value = question;
-      askAssistant("learning", question);
+      document.getElementById("assistant-question").value = steps[index].question;
+      setDrawerOpen(true);
+      askAssistant("learning", steps[index].question);
     });
   });
+}
+
+function openHoldingModal(fundCode, fundName = "", currentAmount = "", currentReturn = "") {
+  const fund =
+    state.dashboard?.watchlist?.find((item) => item.fund_code === fundCode) ||
+    state.dashboard?.positions?.find((item) => item.fund_code === fundCode) ||
+    state.dashboard?.funds?.find((item) => item.fund_code === fundCode);
+
+  if (!fund) {
+    setMessage("没有找到这只基金。", true);
+    return;
+  }
+
+  state.pendingHoldingFund = fund;
+  document.getElementById("holding-modal-code").value = fund.fund_code;
+  document.getElementById("holding-modal-name").value = fundName || fund.fund_name;
+  document.getElementById("holding-modal-amount").value = currentAmount || "";
+
+  // Normalize return value
+  let returnVal = currentReturn || "";
+  if (typeof returnVal === "string") {
+    returnVal = returnVal.replace("%", "");
+  } else if (typeof returnVal === "number" && !isNaN(returnVal)) {
+    returnVal = (returnVal * 100).toFixed(2);
+  }
+  document.getElementById("holding-modal-return").value = returnVal;
+
+  const kicker = document.getElementById("holding-modal-kicker");
+  const title = document.getElementById("holding-modal-title");
+  const isUpdate = state.dashboard?.positions?.some((p) => p.fund_code === fundCode);
+
+  if (kicker) kicker.textContent = isUpdate ? "Update Position" : "Add Holding";
+  if (title) title.textContent = isUpdate ? "更新我的持仓" : "加入我的持仓";
+
+  setHoldingModalOpen(true);
+}
+
+async function submitHoldingModal() {
+  if (!state.pendingHoldingFund) {
+    return;
+  }
+  const amount = document.getElementById("holding-modal-amount").value.trim();
+  const returnRate = document.getElementById("holding-modal-return").value.trim();
+  const fundCode = state.pendingHoldingFund.fund_code;
+  const submitBtn = document.getElementById("holding-modal-submit");
+  submitBtn.disabled = true;
+  submitBtn.textContent = "保存中...";
+  try {
+    const result = await quickImportPosition({
+      fundCode,
+      fundName: state.pendingHoldingFund.fund_name,
+      holdingAmount: amount,
+      returnRate,
+      replace: false,
+      skipRefresh: true, // 先关弹窗再刷新，避免闪烁
+    });
+    state.pendingHoldingFund = null;
+    setHoldingModalOpen(false);
+    await refreshDashboard(result.fund_code);
+  } catch (_error) {
+    // 错误已通过 setMessage 展示
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "加入持仓";
+  }
+}
+
+async function deletePosition(fundCode) {
+  if (!confirm(`确认删除这只基金的持仓记录？`)) return;
+  try {
+    await request("/api/positions/delete", {
+      method: "POST",
+      body: JSON.stringify({ fund_code: fundCode }),
+    });
+    setMessage("已删除持仓。");
+    const nextCode = state.dashboard?.positions?.find((p) => p.fund_code !== fundCode)?.fund_code;
+    await refreshDashboard(nextCode || null);
+  } catch (error) {
+    setMessage(error.message, true);
+  }
 }
 
 async function loadLearningTopics(fundCode = "") {
@@ -952,11 +1042,15 @@ async function refreshRealData(heldOnly) {
   }
 }
 
-async function quickImportPosition() {
-  const fundCode = document.getElementById("quick-fund-code").value.trim();
-  const fundName = document.getElementById("quick-fund-name").value.trim();
-  const holdingAmount = document.getElementById("quick-holding-amount").value.trim();
-  const returnRate = document.getElementById("quick-return-rate").value.trim();
+async function quickImportPosition(options = {}) {
+  const {
+    fundCode = document.getElementById("quick-fund-code").value.trim(),
+    fundName = document.getElementById("quick-fund-name").value.trim(),
+    holdingAmount = document.getElementById("quick-holding-amount").value.trim(),
+    returnRate = document.getElementById("quick-return-rate").value.trim(),
+    replace = false,
+    skipRefresh = false, // 允许调用方自己控制刷新时机
+  } = options;
 
   try {
     const result = await request("/api/positions/quick-import", {
@@ -966,7 +1060,7 @@ async function quickImportPosition() {
         fund_name: fundName,
         holding_amount: holdingAmount,
         holding_return_rate: returnRate,
-        replace: true,
+        replace,
       }),
     });
     setMessage(
@@ -974,9 +1068,13 @@ async function quickImportPosition() {
         result.holding_return_rate
       )}`
     );
-    await refreshDashboard(result.fund_code);
+    if (!skipRefresh) {
+      await refreshDashboard(result.fund_code);
+    }
+    return result;
   } catch (error) {
     setMessage(error.message, true);
+    throw error;
   }
 }
 
@@ -1054,11 +1152,15 @@ async function importPositions(replace) {
 }
 
 async function loadDataSource() {
+  const target = document.getElementById("data-source-note");
+  if (!target) {
+    return;
+  }
   try {
     const data = await request("/api/data-source");
-    document.getElementById("data-source-note").textContent = `真实数据源：${data.provider_name}`;
+    target.textContent = `真实数据源：${data.provider_name}`;
   } catch (error) {
-    document.getElementById("data-source-note").textContent = "当前未加载到数据源说明。";
+    target.textContent = "当前未加载到数据源说明。";
   }
 }
 
@@ -1067,6 +1169,21 @@ async function setupActions() {
   document.getElementById("generate-report-btn").addEventListener("click", generateTodayReport);
   document.getElementById("assistant-ask-btn").addEventListener("click", () => askAssistant("qa"));
   document.getElementById("assistant-learn-btn").addEventListener("click", () => askAssistant("learning"));
+  document.getElementById("assistant-fab").addEventListener("click", () => setDrawerOpen(true));
+  document.getElementById("assistant-fab-nav").addEventListener("click", () => setDrawerOpen(true));
+  document.getElementById("assistant-close-btn").addEventListener("click", () => setDrawerOpen(false));
+  document.getElementById("assistant-drawer").addEventListener("click", (event) => {
+    if (event.target.id === "assistant-drawer") {
+      setDrawerOpen(false);
+    }
+  });
+  document.getElementById("holding-modal-close").addEventListener("click", () => setHoldingModalOpen(false));
+  document.getElementById("holding-modal-submit").addEventListener("click", submitHoldingModal);
+  document.getElementById("holding-modal").addEventListener("click", (event) => {
+    if (event.target.id === "holding-modal") {
+      setHoldingModalOpen(false);
+    }
+  });
   document.getElementById("import-btn").addEventListener("click", () => importPositions(true));
   document.getElementById("append-btn").addEventListener("click", () => importPositions(false));
   document.getElementById("refresh-held-btn").addEventListener("click", () => refreshRealData(true));
@@ -1089,6 +1206,7 @@ async function setupActions() {
   });
   document.getElementById("assistant-question").addEventListener("keydown", (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+      setDrawerOpen(true);
       askAssistant("qa");
     }
   });
@@ -1099,7 +1217,31 @@ async function setupActions() {
   });
 }
 
+// 导航滚动高亮
+function initNavHighlight() {
+  const sections = ["section-overview", "section-focus", "section-detail", "section-learning", "section-holdings", "section-watchlist", "section-import"];
+  const links = document.querySelectorAll(".nav-link");
+  const nav = document.getElementById("top-nav");
+
+  window.addEventListener("scroll", () => {
+    // 滚动后显示导航阴影
+    nav.classList.toggle("scrolled", window.scrollY > 60);
+
+    let current = sections[0];
+    for (const id of sections) {
+      const el = document.getElementById(id);
+      if (el && el.getBoundingClientRect().top <= 100) {
+        current = id;
+      }
+    }
+    links.forEach((link) => {
+      link.classList.toggle("active", link.getAttribute("href") === `#${current}`);
+    });
+  }, { passive: true });
+}
+
 async function boot() {
+  initNavHighlight();
   await setupActions();
   await loadDataSource();
   await loadAIConfig();

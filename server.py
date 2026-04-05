@@ -332,8 +332,9 @@ def import_positions(connection, rows: list[dict], replace: bool = True) -> dict
 
 def import_quick_position(connection, payload: dict, replace: bool = True) -> dict:
     row = normalize_quick_position(payload)
-    if replace:
-        connection.execute("DELETE FROM positions")
+    # 移除这里的全局删除，根据业务逻辑：
+    # 如果是针对单只基金的“更新”或“加入”，不应该清空其他持仓
+    # connection.execute("DELETE FROM positions")
 
     try:
         refresh_result = sync_fund_data(connection, row["fund_code"], name_hint=row["fund_name"] or None)
@@ -543,6 +544,16 @@ class FundPlatformHandler(BaseHTTPRequestHandler):
             self.send_json({"ok": True, **result})
             return
 
+        if path == "/api/positions/delete":
+            fund_code = body.get("fund_code", "").strip()
+            if not fund_code:
+                self.send_error_json(HTTPStatus.BAD_REQUEST, "需要提供 fund_code。")
+                return
+            with get_connection() as connection:
+                connection.execute("DELETE FROM positions WHERE fund_code = ?", (fund_code,))
+                connection.commit()
+            self.send_json({"ok": True, "fund_code": fund_code})
+            return
         if path == "/api/positions/reset":
             with get_connection() as connection:
                 connection.execute("DELETE FROM positions")
